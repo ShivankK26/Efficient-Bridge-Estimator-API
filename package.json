@@ -1,0 +1,22 @@
+{
+  "name": "shivank",
+  "module": "index.ts",
+  "type": "module",
+  "devDependencies": {
+    "@types/bun": "latest",
+    "@types/node": "^22.8.2"
+  },
+  "peerDependencies": {
+    "typescript": "^5.6.3"
+  },
+  "scripts": {
+    "start": "bun run src/index.ts",
+    "build": "bun build src/index.ts",
+    "dev": "bun run --watch src/index.ts"
+  },
+  "dependencies": {
+    "axios": "^1.7.7",
+    "elysia": "^1.1.23",
+    "ioredis": "^5.4.1"
+  }
+}
