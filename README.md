@@ -2,7 +2,7 @@
 
 **Problem Statement:** A user wants X USDC on lets say polygon. He has funds spread across many other chains. Now the API is to be designed to return the most efficient route/s to source X USDC from other chains. This can be done by bridging from one or more chains.
 
-### Tech Stack
+## Tech Stack
 
 The Tech Stack for Building this Project is - 
 
@@ -15,7 +15,7 @@ I used the APIs of Socket Protocol (Bungee Exchange) for Building this Project a
 - [Balance across all Chains](https://docs.bungee.exchange/socket-api-reference/balances-controller-get-balances)
 - [Bridge Fess across all Chains](https://docs.bungee.exchange/socket-api-reference/quote-controller-get-quote/)
 
-### Basics of Bun
+## Basics of Bun
 
 To install dependencies:
 
@@ -31,7 +31,7 @@ bun run index.ts
 
 This project was created using `bun init` in bun v1.1.33. [Bun](https://bun.sh) is a fast all-in-one JavaScript runtime.
 
-### `localhost` API URL
+## `localhost` API URL
 
 Below is the Link for the localhost API URL which anyone can try in their Machine. The average response time of the Socket Protocol APIs is around 5-7 secs, so this is the time which is being used.
 
@@ -39,7 +39,7 @@ Below is the Link for the localhost API URL which anyone can try in their Machin
 http://localhost:3000/api/bridge-route?targetChain=137&amount=100&tokenAddress=0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee&userAddress=0x3e8cB4bd04d81498aB4b94a392c334F5328b237b
 ```
 
-### Bridge Service Functions
+## Bridge Service Function
 
 A Simple breakdown of `BridgeService.findBestRoute` Method and its Implementations -
 
@@ -47,14 +47,14 @@ A Simple breakdown of `BridgeService.findBestRoute` Method and its Implementatio
 
 This function identifies the most efficient bridging route for transferring a target amount of USDC to a specified chain. Here’s how it works:
 
-#### 1. Fetching User Balances
+### 1. Fetching User Balances
    The function first fetches the user’s balances across chains to determine if they already have USDC on the target chain. If not, it calculates the shortfall to cover.
 
    ```typescript
    const { result: balances } = await BalanceService.fetchUserBalances("0x02023e8f8D0aa65562af1183DF7f76d79D6f7248");
    ```
 
-#### 2. Calculating Shortfall
+### 2. Calculating Shortfall
    It then checks if there’s enough USDC on the target chain. If not, the `shortfall` variable is set to the required amount. If there is sufficient USDC, the shortfall is reduced or set to zero.
 
    ```typescript
@@ -69,7 +69,7 @@ This function identifies the most efficient bridging route for transferring a ta
    }
    ```
 
-#### 3. Filtering Source Balances
+### 3. Filtering Source Balances
    Next, it identifies USDC balances on other chains that can be used to bridge the shortfall amount.
 
    ```typescript
@@ -78,7 +78,7 @@ This function identifies the most efficient bridging route for transferring a ta
    );
    ```
 
-#### 4. Estimating Bridging Fees
+### 4. Estimating Bridging Fees
    For each balance on other chains, the function uses `getAllFees` to get the bridging fee data and route options. Each route is then added to `possibleRoutes` for further processing.
 
    ```javascript
@@ -114,7 +114,7 @@ This function identifies the most efficient bridging route for transferring a ta
    }
    ```
 
-#### 5. Selecting the Best Route
+### 5. Selecting the Best Route
    The function then sorts the routes based on gas fees to identify the most cost-effective option and selects routes that cover the shortfall amount.
 
    ```javascript
@@ -132,7 +132,7 @@ This function identifies the most efficient bridging route for transferring a ta
    }
    ```
 
-#### 6. Returning the Result
+### 6. Returning the Result
    Finally, the function returns the selected routes, total fees, and the total bridged amount.
 
    ```javascript
@@ -143,7 +143,7 @@ This function identifies the most efficient bridging route for transferring a ta
    };
    ```
 
-### API Response Example
+## API Response Example
 
 ```
 {
