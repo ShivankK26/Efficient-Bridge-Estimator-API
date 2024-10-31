@@ -36,142 +36,100 @@ export class BridgeService {
     sort: string,
     amount: number
   ): Promise<any> {
-    // Fetch user balances (assuming the service and API exist).
-    const { result: balances } =
-      await BalanceService.fetchUserBalances(userAddress);
+    const { result: balances } = await BalanceService.fetchUserBalances(userAddress);
 
-    // Calculate the shortfall amount required on the target chain.
-    let shortfall = amount;
-
-    // Filter out USDC balances on the target chain
-    const targetChainUSDCBalance = balances.find(
+    // Filter out balances that are relevant for bridging.
+    const sourceAmount = balances.filter(
       (balance: any) =>
-        balance.chainId === fromChainId &&
-        balance.address.toLowerCase() === fromTokenAddress.toLowerCase()
+        balance.chainId !== fromChainId && balance.chainAgnosticId === 'USDC'
     );
 
-    // Check if the user has USDC on the target chain.
-    if (targetChainUSDCBalance) {
-      shortfall -=
-        targetChainUSDCBalance.amount *
-        Math.pow(10, targetChainUSDCBalance.decimals); // Convert to smallest unit if needed.
-    }
-
-    // If no shortfall, no need to bridge.
-    if (shortfall <= 0) {
-      return {
-        bestRoute: [],
-        totalFee: 0,
-        message: 'No bridging required',
-      };
-    }
-
-    // Identify all USDC balances on other chains.
-    const sourceBalances = balances.filter(
-      (balance: any) =>
-        balance.chainId !== fromChainId && balance.chainAgnosticId === 'USDC' // Match based on chain-agnostic USDC identifier.
+    // Fetch all bridge quotes once for each chain to minimize repeated API calls.
+    const bridgeQuotes = await Promise.all(
+      sourceAmount.map(async (balance: any) => {
+        const bridgeData = await FeeService.getAllFees(
+          balance.chainId,
+          fromChainId,
+          balance.address,
+          fromTokenAddress,
+          fromAmount,
+          userAddress
+        );
+        return bridgeData.result.routes.map((route: any) => ({
+          ...route,
+          fromChainId: balance.chainId,
+          fromAmount: balance.amount * Math.pow(10, balance.decimals),
+          toAmount: route.toAmount / Math.pow(10, balance.decimals),
+          bridgeName: route.usedBridgeNames.join(', '),
+          totalGasFeesInUsd: route.totalGasFeesInUsd,
+        }));
+      })
     );
 
-    // Calculate the best possible routes.
-    const { selectedRoutes, totalFee, totalBridged } =
-      await this.calculateBestRoutes(
-        sourceBalances,
-        fromChainId,
-        fromTokenAddress,
-        userAddress,
-        shortfall,
-        targetChainUSDCBalance.decimals
-      );
+    // Flatten the quotes array.
+    const flatQuotes = bridgeQuotes.flat();
+
+    // Performing back tracking.
+    const bestComb = this.findOptimiztedComb(flatQuotes, amount);
 
     return {
-      bestRoute: selectedRoutes,
-      totalFee,
-      totalBridged,
+      bestRoute: bestComb.selectedRoutes,
+      totalFee: bestComb.totalFee,
+      totalBridged: bestComb.totalBridged,
     };
   }
 
   /**
-   * Calculates the best routes for bridging tokens from source balances to the target chain.
-   * @async
-   * @param {Array} sourceBalances    - The user's balances on various chains excluding the target chain.
-   * @param {number} fromChainId      - The ID of the target chain.
-   * @param {string} fromTokenAddress - The token address on the target chain.
-   * @param {string} userAddress      - The user's blockchain address.
-   * @param {number} shortfall        - The total amount of tokens needed on the target chain.
-   * @param {number} targetDecimals   - The number of decimals for the target chain token.
-   * @returns {Promise<object>} - Returns an object containing selected routes, total fees, and total bridged amount.
+   * Recursively calculates the optimal combination of routes to cover the shortfall using a backtracking approach.
+   * @param {Array} quotes         - Array of available bridge quotes.
+   * @param {number} targetAmount  - The target amount to bridge.
+   * @returns {object}             - Returns the best combination of routes that covers the target amount at minimal cost.
    */
-  static async calculateBestRoutes(
-    sourceBalances: any[],
-    fromChainId: number,
-    fromTokenAddress: string,
-    userAddress: string,
-    shortfall: number,
-    targetDecimals: number
-  ): Promise<any> {
-    const possibleRoutes = [];
+  static findOptimiztedComb(quotes: any[], targetAmount: number) {
+    let bestResult = { selectedRoutes: [], totalFee: Infinity, totalBridged: 0 };
 
-    // Loop through each balance and calculate the fees to bridge it to the target chain.
-    for (const balance of sourceBalances) {
-      const fromChainId = balance.chainId;
-      const fromAmount = Math.min(
-        balance.amount * Math.pow(10, balance.decimals),
-        shortfall
-      ); 
+    /**
+     * Helper function for recursive backtracking.
+     * @param {Array} currentRoutes   - Array of currently selected routes in this path.
+     * @param {number} currentBridged - Total amount bridged so far.
+     * @param {number} currentFee     - Total fee for the current path.
+     * @param {number} startIndex     - Starting index for current recursion level.
+     */
+    function backtracking(
+      currentRoutes: any[],
+      currentBridged: number,
+      currentFee: number,
+      startIndex: number
+    ) {
+      if (currentBridged >= targetAmount && currentFee < bestResult.totalFee) {
+        bestResult = {
+          selectedRoutes: [...currentRoutes],
+          totalFee: currentFee,
+          totalBridged: currentBridged,
+        };
+        return;
+      }
 
-      // Call FeeService to get the bridging fee and details.
-      const bridgeData = await FeeService.getAllFees(
-        fromChainId,
-        fromChainId,
-        balance.address,
-        fromTokenAddress,
-        fromAmount,
-        userAddress
-      );
+      // Trying each remaining quote and backtrack.
+      for (let i = startIndex; i < quotes.length; i++) {
+        const quote = quotes[i];
+        if (currentBridged + quote.toAmount > targetAmount) continue; 
 
-      // If successful response and fees available, calculate the effective cost.
-      if (bridgeData && bridgeData.result) {
-        const { routes } = bridgeData.result;
-        for (const route of routes) {
-          possibleRoutes.push({
-            fromChainId,
-            toChainId: fromChainId,
-            routeId: route.routeId,
-            fromAmount:
-              parseFloat(route.fromAmount) / Math.pow(10, balance.decimals),
-            toAmount:
-              parseFloat(route.toAmount) / Math.pow(10, balance.decimals),
-            bridgeName: route.usedBridgeNames.join(', '),
-            totalGasFeesInUsd: route.totalGasFeesInUsd,
-          });
-        }
+        // Add current quote to path.
+        currentRoutes.push(quote); 
+        backtracking(
+          currentRoutes,
+          currentBridged + quote.toAmount,
+          currentFee + quote.totalGasFeesInUsd,
+          i + 1
+        );
+        currentRoutes.pop(); 
       }
     }
 
-    // Sort the possible routes by total gas fees (or any other cost metric).
-    possibleRoutes.sort((a, b) => a.totalGasFeesInUsd - b.totalGasFeesInUsd);
+    // Initializing backtracking from starting of the quotes array.
+    backtracking([], 0, 0, 0);
 
-    // Select routes that cover the shortfall efficiently.
-    const selectedRoutes = [];
-    let totalBridged = 0;
-    let totalFee = 0;
-
-    for (const route of possibleRoutes) {
-      if (totalBridged >= shortfall / Math.pow(10, targetDecimals)) break;
-
-      const shortfallThreshold =
-        Number(process.env.SHORTFALL_THRESHOLD) || 0.01;
-      if (route.fromAmount > shortfallThreshold) {
-        selectedRoutes.push(route);
-        totalBridged += route.toAmount;
-        totalFee += route.totalGasFeesInUsd;
-      }
-    }
-
-    return {
-      selectedRoutes,
-      totalFee,
-      totalBridged,
-    };
+    return bestResult;
   }
 }
