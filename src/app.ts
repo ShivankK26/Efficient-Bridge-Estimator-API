@@ -33,7 +33,7 @@ const PORT = process.env.PORT || 3000;
 app.listen(
   {
     port: PORT,
-    idleTimeout: 50, // You can adjust this as needed.
+    idleTimeout: 50, 
   },
   () => console.log(`Server running on port ${PORT}`)
 );

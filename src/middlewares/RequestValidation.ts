@@ -41,7 +41,7 @@ export const RequestValidation = ({ query }: Context) => {
     };
   }
 
-  // Ensure that required parameters are of the correct type (additional checks can be added as needed).
+  // Ensure that required parameters are of the correct type.
   if (
     isNaN(Number(fromChainId)) ||
     isNaN(Number(toChainId)) ||
