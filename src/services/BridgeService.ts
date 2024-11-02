@@ -66,10 +66,10 @@ export class BridgeService {
       })
     );
 
-    // Flatten the quotes array.
+    // Each balance might have multiple possible bridge routes, flat() is used to get a single-level array of all routes.
     const flatQuotes = bridgeQuotes.flat();
 
-    // Performing back tracking.
+    // To find the optimal combination of routes that achieve the target bridged amount.
     const bestComb = this.findOptimiztedComb(flatQuotes, amount);
 
     return {
@@ -86,6 +86,7 @@ export class BridgeService {
    * @returns {object}             - Returns the best combination of routes that covers the target amount at minimal cost.
    */
   static findOptimiztedComb(quotes: any[], targetAmount: number) {
+    // It starts with a bestResult object to keep track of the currently optimal selection of routes.
     let bestResult = { selectedRoutes: [], totalFee: Infinity, totalBridged: 0 };
 
     /**
@@ -101,6 +102,7 @@ export class BridgeService {
       currentFee: number,
       startIndex: number
     ) {
+      // If the currentBridged amount (the accumulated tokens from selected routes) >= targetAmount and has a currentFee lower than the bestResult, it updates bestResult.
       if (currentBridged >= targetAmount && currentFee < bestResult.totalFee) {
         bestResult = {
           selectedRoutes: [...currentRoutes],
@@ -110,7 +112,7 @@ export class BridgeService {
         return;
       }
 
-      // Trying each remaining quote and backtrack.
+      // For each route, it checks if adding the route to the current path would exceed targetAmount. If not, it adds the route to currentRoutes, updates currentBridged and currentFee, and recursively calls backtracking with the updated parameters.
       for (let i = startIndex; i < quotes.length; i++) {
         const quote = quotes[i];
         if (currentBridged + quote.toAmount > targetAmount) continue; 
