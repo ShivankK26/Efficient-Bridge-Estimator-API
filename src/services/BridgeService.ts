@@ -6,6 +6,22 @@
 import { FeeService } from './FeeService';
 import { BalanceService } from './BalanceService';
 
+interface Route {
+  fromChainId: number;
+  toChainId: number;
+  routeId: string;
+  fromAmount: number;
+  toAmount: number;
+  bridgeName: string;
+  totalGasFeesInUsd: number;
+}
+
+interface BestResult {
+  selectedRoutes: Route[];
+  totalFee: number;
+  totalBridged: number;
+}
+
 /**
  * @class BridgeService
  * @description Service class for handling the calculation of the best routes for bridging tokens between blockchains.
@@ -37,7 +53,6 @@ export class BridgeService {
     amount: number
   ): Promise<any> {
     const { result: balances } = await BalanceService.fetchUserBalances(userAddress);
-
     // Filter out balances that are relevant for bridging.
     const sourceAmount = balances.filter(
       (balance: any) =>
@@ -66,7 +81,7 @@ export class BridgeService {
       })
     );
 
-    // Each balance might have multiple possible bridge routes, flat() is used to get a single-level array of all routes.
+    // Flatten to get a single-level array of all routes.
     const flatQuotes = bridgeQuotes.flat();
 
     // To find the optimal combination of routes that achieve the target bridged amount.
@@ -85,9 +100,9 @@ export class BridgeService {
    * @param {number} targetAmount  - The target amount to bridge.
    * @returns {object}             - Returns the best combination of routes that covers the target amount at minimal cost.
    */
-  static findOptimiztedComb(quotes: any[], targetAmount: number) {
-    // It starts with a bestResult object to keep track of the currently optimal selection of routes.
-    let bestResult = { selectedRoutes: [], totalFee: Infinity, totalBridged: 0 };
+  static findOptimiztedComb(quotes: Route[], targetAmount: number): BestResult {
+    // Define bestResult with proper typing for selectedRoutes, totalFee, and totalBridged.
+    let bestResult: BestResult = { selectedRoutes: [], totalFee: Infinity, totalBridged: 0 };
 
     /**
      * Helper function for recursive backtracking.
@@ -97,12 +112,11 @@ export class BridgeService {
      * @param {number} startIndex     - Starting index for current recursion level.
      */
     function backtracking(
-      currentRoutes: any[],
+      currentRoutes: Route[],
       currentBridged: number,
       currentFee: number,
       startIndex: number
     ) {
-      // If the currentBridged amount (the accumulated tokens from selected routes) >= targetAmount and has a currentFee lower than the bestResult, it updates bestResult.
       if (currentBridged >= targetAmount && currentFee < bestResult.totalFee) {
         bestResult = {
           selectedRoutes: [...currentRoutes],
@@ -112,24 +126,22 @@ export class BridgeService {
         return;
       }
 
-      // For each route, it checks if adding the route to the current path would exceed targetAmount. If not, it adds the route to currentRoutes, updates currentBridged and currentFee, and recursively calls backtracking with the updated parameters.
       for (let i = startIndex; i < quotes.length; i++) {
         const quote = quotes[i];
-        if (currentBridged + quote.toAmount > targetAmount) continue; 
-
-        // Add current quote to path.
-        currentRoutes.push(quote); 
+        
+        // Add current quote to path. 
+        currentRoutes.push(quote);
         backtracking(
           currentRoutes,
           currentBridged + quote.toAmount,
           currentFee + quote.totalGasFeesInUsd,
           i + 1
         );
-        currentRoutes.pop(); 
+        currentRoutes.pop();
       }
     }
 
-    // Initializing backtracking from starting of the quotes array.
+    // Start the backtracking process from the beginning of the quotes array.
     backtracking([], 0, 0, 0);
 
     return bestResult;
